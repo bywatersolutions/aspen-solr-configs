@@ -1,0 +1,16 @@
+upstream:
+  repository: "https://github.com/bywatersolutions/aspen-discovery"
+  branch: "25.Q4.06.00"
+  commit: "latest"
+  sync_date: "2026-01-02"
+
+version:
+  current: "v0.0.0"
+  based_on: "25.Q4.06.00"
+  
+optimizations:
+  applied: []
+  
+notes: |
+  Initial release containing unmodified Aspen Discovery 25.Q4.06.00 configsets.
+  This serves as the baseline for future optimizations.

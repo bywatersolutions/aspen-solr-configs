@@ -1,0 +1,4 @@
+configsets/
+*.tar.gz
+*.sha256
+*.md5
