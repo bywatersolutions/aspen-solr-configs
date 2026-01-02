@@ -2,47 +2,216 @@ name: Build and Test
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  test-solr:
+    name: "Test with Solr ${{ matrix.solr-version }}"
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        solr-version: ["8.11", "9.7"]
+    
+    services:
+      solr:
+        image: solr:${{ matrix.solr-version }}
+        ports:
+          - 8983:8983
+        env:
+          SOLR_MODE: solrcloud
+        options: >-
+          --health-cmd "curl -f http://localhost:8983/solr/admin/info/system || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
     
     steps:
     - name: Checkout
       uses: actions/checkout@v4
     
-    - name: Create package
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libxml2-utils jq
+    
+    - name: Validate schemas
+      run: |
+        sudo apt-get update && sudo apt-get install -y libxml2-utils
+        echo "Validating XML syntax for all schemas..."
+        find configsets -name "schema.xml" -exec xmllint --noout {} \;
+        find configsets -name "solrconfig.xml" -exec xmllint --noout {} \;
+        echo "✅ All XML files are valid"
+    
+    - name: Prepare version-specific configs
+      run: |
+        SOLR_VERSION="${{ matrix.solr-version }}"
+        echo "DEBUG: Solr version is '$SOLR_VERSION'"
+        
+        # Copy version-specific solrconfig.xml files based on major version
+        if [[ "$SOLR_VERSION" == 9.* ]]; then
+          echo "✅ Using Solr 9.x configs for all configsets"  
+          for configset in configsets/*/; do
+            configset_name=$(basename "$configset")
+            if [ -f "$configset/conf/solrconfig.xml.9.x" ]; then
+              echo "Before copy - uncommented XSLTResponseWriter in main file:"
+              grep 'class="solr.XSLTResponseWriter"' "$configset/conf/solrconfig.xml" | grep -v "<!--" | wc -l
+              echo "Checking .9.x file has NO uncommented XSLTResponseWriter:"
+              ninex_count=$(grep 'class="solr.XSLTResponseWriter"' "$configset/conf/solrconfig.xml.9.x" | grep -v "<!--" | wc -l)
+              echo "$ninex_count"
+              if [ "$ninex_count" -ne 0 ]; then
+                echo "❌ ERROR: .9.x file has uncommented XSLTResponseWriter references!"
+                exit 1
+              fi
+              cp "$configset/conf/solrconfig.xml.9.x" "$configset/conf/solrconfig.xml"
+              echo "After copy - checking what's actually in the main file:"
+              grep -n "XSLTResponseWriter" "$configset/conf/solrconfig.xml" || echo "No XSLTResponseWriter found in main file"
+              echo "After copy - uncommented XSLTResponseWriter in main file:"
+              after_count=$(grep 'class="solr.XSLTResponseWriter"' "$configset/conf/solrconfig.xml" | grep -v "<!--" | wc -l)
+              echo "$after_count"
+              if [ "$after_count" -ne 0 ]; then
+                echo "❌ ERROR: Main file still has uncommented XSLTResponseWriter after copy!"
+                exit 1
+              fi
+              echo "✅ Updated $configset_name with 9.x config"
+            else
+              echo "❌ No 9.x config found for $configset_name"
+            fi
+          done
+        elif [[ "$SOLR_VERSION" == 8.* ]]; then
+          echo "✅ Using main configs for Solr 8.x (they have improvements over .8.x files)"
+        else
+          echo "❌ Unknown Solr version: $SOLR_VERSION"
+          exit 1
+        fi
+
+    - name: Copy configsets into Solr container
+      run: |
+        echo "Using Solr container: ${{ job.services.solr.id }}"
+        
+        for configset_dir in configsets/*/; do
+          configset=$(basename "$configset_dir")
+          echo "Copying configset: $configset"
+          docker cp configsets/${configset} ${{ job.services.solr.id }}:/opt/solr/server/solr/configsets/
+        done
+    
+    - name: Upload configsets to ZooKeeper
+      run: |
+        # Wait for Solr
+        timeout 60 bash -c 'until curl -f http://localhost:8983/solr/admin/info/system; do sleep 2; done'
+        
+        for configset_dir in configsets/*/; do
+          configset=$(basename "$configset_dir")
+          echo "Uploading configset: $configset"
+          if docker exec ${{ job.services.solr.id }} /opt/solr/bin/solr zk upconfig -n ${configset} -d /opt/solr/server/solr/configsets/${configset} -z localhost:9983; then
+            echo "✅ Successfully uploaded configset: $configset"
+          else
+            echo "❌ Failed to upload configset: $configset"
+            exit 1
+          fi
+        done
+        
+        echo "Checking available configsets in ZooKeeper..."
+        docker exec ${{ job.services.solr.id }} /opt/solr/bin/solr zk ls /configs -z localhost:9983 || echo "Could not list ZK configs"
+    
+    - name: Test collection creation
+      run: |
+        for configset_dir in configsets/*/; do
+          configset=$(basename "$configset_dir")
+          echo "Testing configset: $configset"
+          
+          CREATE_RESULT=$(curl -s -X POST "http://localhost:8983/solr/admin/collections?action=CREATE&name=test_${configset}&numShards=1&replicationFactor=1&collection.configName=${configset}")
+          echo "Create result: $CREATE_RESULT"
+          
+          if echo "$CREATE_RESULT" | jq -e '.responseHeader.status == 0' > /dev/null; then
+            echo "✅ Collection test_${configset} created successfully"
+            
+            # For grouped_works_v2, check docValues optimizations
+            if [ "$configset" = "grouped_works_v2" ]; then
+              echo "Checking docValues optimizations..."
+              for field in format format_category authorStr available_at; do
+                DOCVALUES=$(curl -s "http://localhost:8983/solr/test_${configset}/schema/fields/${field}?wt=json" | jq -r '.field.docValues // false')
+                if [ "$DOCVALUES" = "true" ]; then
+                  echo "✅ Field $field has docValues enabled"
+                else
+                  echo "❌ Field $field missing docValues"
+                fi
+              done
+            fi
+            
+            # Test basic query functionality
+            curl -s "http://localhost:8983/solr/test_${configset}/select?q=*:*&rows=0&wt=json" | jq -e '.responseHeader.status == 0' && echo "✅ Query test passed for $configset"
+          else
+            echo "❌ Failed to create collection with $configset configset"
+            echo "=== Last 30 lines of solr.log ==="
+            docker exec ${{ job.services.solr.id }} tail -30 /var/solr/logs/solr.log || echo "Could not read solr.log"
+            echo "=== Searching for errors ==="
+            docker exec ${{ job.services.solr.id }} grep -i "error\|exception\|failed\|caused by" /var/solr/logs/solr.log | tail -10 || echo "No errors found in logs"
+            exit 1
+          fi
+        done
+        
+        echo "✅ Solr ${{ matrix.solr-version }} test completed"
+
+  build-and-release:
+    name: "Build and Release"
+    runs-on: ubuntu-latest
+    needs: [test-solr]
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Create packages
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          VERSION="dev-$(date +%Y%m%d)"
-        fi
-        
         echo "Building version: $VERSION"
         
-        # Create release package
-        tar -czf aspen-solr-configs-${VERSION}.tar.gz configsets/
+        # Create Solr 8.x package (using main configs)
+        mkdir -p build/solr8x
+        cp -r configsets build/solr8x/
+        cp README.md version.yaml build/solr8x/
+        # Remove version-specific files
+        find build/solr8x/ -name "*.8.x" -delete
+        find build/solr8x/ -name "*.9.x" -delete
+        echo "solr_version: 8.x" >> build/solr8x/version.yaml
+        
+        # Create Solr 9.x package (using 9.x configs)
+        mkdir -p build/solr9x
+        cp -r configsets build/solr9x/
+        cp README.md version.yaml build/solr9x/
+        # Replace with 9.x configs
+        for configset in configsets/*/; do
+          configset_name=$(basename "$configset")
+          if [ -f "$configset/conf/solrconfig.xml.9.x" ]; then
+            cp "$configset/conf/solrconfig.xml.9.x" "build/solr9x/configsets/$configset_name/conf/solrconfig.xml"
+          fi
+        done
+        # Remove version-specific files
+        find build/solr9x/ -name "*.8.x" -delete
+        find build/solr9x/ -name "*.9.x" -delete
+        echo "solr_version: 9.x" >> build/solr9x/version.yaml
+        
+        # Create archives
+        cd build
+        tar -czf ../aspen-solr-configs-${VERSION}-solr8x.tar.gz solr8x/
+        tar -czf ../aspen-solr-configs-${VERSION}-solr9x.tar.gz solr9x/
+        cd ..
         
         # Create checksums
-        sha256sum aspen-solr-configs-${VERSION}.tar.gz > aspen-solr-configs-${VERSION}.tar.gz.sha256
-        md5sum aspen-solr-configs-${VERSION}.tar.gz > aspen-solr-configs-${VERSION}.tar.gz.md5
+        sha256sum aspen-solr-configs-${VERSION}-solr8x.tar.gz > aspen-solr-configs-${VERSION}-solr8x.tar.gz.sha256
+        sha256sum aspen-solr-configs-${VERSION}-solr9x.tar.gz > aspen-solr-configs-${VERSION}-solr9x.tar.gz.sha256
+        md5sum aspen-solr-configs-${VERSION}-solr8x.tar.gz > aspen-solr-configs-${VERSION}-solr8x.tar.gz.md5
+        md5sum aspen-solr-configs-${VERSION}-solr9x.tar.gz > aspen-solr-configs-${VERSION}-solr9x.tar.gz.md5
         
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
     
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-package
-        path: |
-          aspen-solr-configs-*.tar.gz
-          aspen-solr-configs-*.tar.gz.sha256
-          aspen-solr-configs-*.tar.gz.md5
-    
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: |
@@ -54,87 +223,23 @@ jobs:
           
           Based on Aspen Discovery version: $(grep 'based_on:' version.yaml | cut -d'"' -f2)
           
+          ### Two Packages Available:
+          - **aspen-solr-configs-${{ env.VERSION }}-solr8x.tar.gz**: For Solr 8.11+ (enhanced main configs)
+          - **aspen-solr-configs-${{ env.VERSION }}-solr9x.tar.gz**: For Solr 9.0+ (modules paths, modern cache settings)
+          
+          ### Performance Improvements:
+          - Added docValues to critical fields: format, format_category, authorStr, available_at  
+          - Enhanced suggester configurations with BlendedInfixLookupFactory
+          - Context-aware filtering for better search suggestions
+          
           ### Installation
           ```bash
           curl -L -o aspen-solr-configs.tar.gz https://github.com/bywatersolutions/aspen-solr-configs/releases/download/${{ env.VERSION }}/aspen-solr-configs-${{ env.VERSION }}.tar.gz
           tar -xzf aspen-solr-configs.tar.gz -C /opt/solr/server/solr/configsets/
           ```
+          
+          ### Tested with
+          - ✅ Solr 8.11
+          - ✅ Solr 9.7
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  test-solr8:
-    runs-on: ubuntu-latest
-    needs: build
-    
-    services:
-      solr:
-        image: solr:8.11
-        ports:
-          - 8983:8983
-        options: >-
-          --health-cmd "curl -f http://localhost:8983/solr/admin/info/system || exit 1"
-          --health-interval 30s
-          --health-timeout 10s
-          --health-retries 5
-    
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: release-package
-    
-    - name: Test with Solr 8.11
-      run: |
-        # Wait for Solr
-        timeout 60 bash -c 'until curl -f http://localhost:8983/solr/admin/info/system; do sleep 2; done'
-        
-        # Extract configs
-        tar -xzf aspen-solr-configs-*.tar.gz
-        
-        # Upload configset
-        curl -X POST --header "Content-Type:application/octet-stream" --data-binary @configsets/grouped_works_v2.zip "http://localhost:8983/solr/admin/configs?action=UPLOAD&name=grouped_works_v2" || {
-          # Alternative: create collection directly
-          curl "http://localhost:8983/solr/admin/collections?action=CREATE&name=test_collection&numShards=1&replicationFactor=1&configName=_default"
-        }
-        
-        echo "✅ Solr 8.11 test completed"
-
-  test-solr9:
-    runs-on: ubuntu-latest
-    needs: build
-    
-    services:
-      solr:
-        image: solr:9.7
-        ports:
-          - 8983:8983
-        options: >-
-          --health-cmd "curl -f http://localhost:8983/solr/admin/info/system || exit 1"
-          --health-interval 30s
-          --health-timeout 10s
-          --health-retries 5
-    
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: release-package
-    
-    - name: Test with Solr 9.7
-      run: |
-        # Wait for Solr
-        timeout 60 bash -c 'until curl -f http://localhost:8983/solr/admin/info/system; do sleep 2; done'
-        
-        # Extract configs
-        tar -xzf aspen-solr-configs-*.tar.gz
-        
-        # Test schema validation
-        find configsets -name "schema.xml" -exec xmllint --noout {} \;
-        
-        echo "✅ Solr 9.7 test completed"
