@@ -1337,6 +1337,14 @@
     <str name="params.resource.loader.enabled">${velocity.params.resource.loader.enabled:false}</str>
   </queryResponseWriter>
 
+<!--  &lt;!&ndash; XSLT response writer transforms the XML output by any xslt file found-->
+<!--       in Solr's conf/xslt directory.  Changes to xslt files are checked for-->
+<!--       every xsltCacheLifetimeSeconds.-->
+<!--    &ndash;&gt;-->
+<!--  <queryResponseWriter name="xslt" class="solr.XSLTResponseWriter">-->
+<!--    <int name="xsltCacheLifetimeSeconds">5</int>-->
+<!--  </queryResponseWriter>-->
+
   <!-- Query Parsers
 
        https://lucene.apache.org/solr/guide/query-syntax-and-parsing.html
