@@ -912,7 +912,7 @@
         geographic_facet^50
         personal_name_facet^50
         corporate_name_facet^50
-        mpaa_rating
+        content_rating
         accelerated_reader_interest_level
       </str>
       <str name="mlt.mintf">1</str>
@@ -1362,6 +1362,14 @@
     <str name="solr.resource.loader.enabled">${velocity.solr.resource.loader.enabled:true}</str>
     <str name="params.resource.loader.enabled">${velocity.params.resource.loader.enabled:false}</str>
   </queryResponseWriter>
+
+<!--  &lt;!&ndash; XSLT response writer transforms the XML output by any xslt file found-->
+<!--       in Solr's conf/xslt directory.  Changes to xslt files are checked for-->
+<!--       every xsltCacheLifetimeSeconds.-->
+<!--    &ndash;&gt;-->
+<!--  <queryResponseWriter name="xslt" class="solr.XSLTResponseWriter">-->
+<!--    <int name="xsltCacheLifetimeSeconds">5</int>-->
+<!--  </queryResponseWriter>-->
 
   <!-- Query Parsers
 

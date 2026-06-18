@@ -7,6 +7,7 @@
 		<fieldType name="float" class="FloatPointField"/>
 		<fieldType name="date" class="DatePointField"/>
 		<fieldType name="random" class="RandomSortField"/>
+		<fieldType name="pints" class="solr.IntPointField" docValues="true" multiValued="true"/>
 		<fieldType name="text_general" class="solr.TextField" positionIncrementGap="100">
 			<analyzer type="index">
 				<tokenizer class="solr.StandardTokenizerFactory"/>
@@ -220,7 +221,8 @@
 		<!-- AUTHOR INFORMATION -->
 		<field name="author" type="searchable_text_unstemmed" indexed="true" stored="false" />
 		<field name="author_display" type="unchanged_string" indexed="false" stored="true" multiValued="false"/> <!-- The author to display to the user -->
-		<field name="authorStr" type="unchanged_string" indexed="true" stored="true" termVectors="true" docValues="true"/>
+		<field name="authorStr" type="unchanged_string" indexed="true" stored="true" termVectors="true"/>
+		<field name="author_sort" type="alphaOnlySort" indexed="true" stored="true"/> <!-- author for sorting -->
 		<field name="author_exact" type="text-exact" indexed="true" stored="true" />
 		<field name="author_left" type="text-left" indexed="true" stored="true" />
 		<field name="author-letter" type="unchanged_string" indexed="true" stored="true"/>
@@ -255,22 +257,24 @@
 
 		<!-- Format information -->
 		<field name="grouping_category" type="unchanged_string" indexed="true" stored="true" multiValued="false"/>
-		<field name="format" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="format" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
 		<field name="format_boost" type="integer" indexed="true" stored="false"/>
-		<field name="format_category" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="format_category" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
 
 		<!-- Fields to determine ownership and location based on location codes -->
-		<field name="owning_library" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
-		<field name="owning_location" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
-		<field name="collection" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
-		<field name="detailed_location" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
-		<field name="shelf_location" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="owning_library" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="owning_location" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="collection" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="detailed_location" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="shelf_location" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
 
 		<!-- Fields to determine availability -->
-		<field name="available_at" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
-		<field name="availability_toggle" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="available_at" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="availability_toggle" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<dynamicField name="available_copies_*" type="integer" indexed="true" docValues="true" stored="false" multiValued="true"/>
 
-		<!-- Language Related Fields -->
+		<!-- Language Related Fields -->\
+		<field name="all_languages" type="unchanged_string" indexed="true" stored="true" multiValued="true" omitNorms="true" docValues="true"/>
 		<field name="language" type="unchanged_string" indexed="true" stored="true" multiValued="true" omitNorms="true" docValues="true"/>
 		<field name="translation" type="unchanged_string" indexed="true" stored="true" multiValued="true" omitNorms="true" docValues="true"/>
 		<field name="language_boost" type="integer" indexed="true" stored="false" multiValued="false" omitNorms="true" default="1"/>
@@ -278,16 +282,17 @@
 
 		<!-- Publication information -->
 		<field name="publisher" type="searchable_text_minimal_stem" indexed="true" stored="true" multiValued="true"/>
-		<field name="publisherStr" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="publisherStr" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
 		<field name="publishDate" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 		<field name="publishDateSort" type="unchanged_string" indexed="true" stored="true"/>
 		<field name="placeOfPublication" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 
 		<!-- Facets -->
 		<field name="physical" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="duration" type="pints" indexed="true" stored="true" multiValued="true" default="0" docValues="true"/>
 		<field name="edition" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
 		<field name="dateSpan" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
-		<field name="econtent_source" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="econtent_source" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
 		<field name="subject_facet" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true" termVectors="true"/>
 		<field name="subject" type="searchable_text_minimal_stem" indexed="true" stored="true" multiValued="true"/>
 		<field name="subject_proper" type="textProper" indexed="true" stored="false" multiValued="true"/>
@@ -319,7 +324,7 @@
 		<field name="barcode" type="unchanged_string" indexed="true" stored="false" multiValued="true"/>
 
 		<!-- awards and ratings -->
-		<field name="mpaa_rating" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="content_rating" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 		<field name="awards_facet" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true" termVectors="true"/>
 		<field name="lexile_score" type="integer" indexed="true" stored="true" multiValued="false" default="-1" docValues="true"/>
 		<field name="lexile_code" type="unchanged_string" indexed="true" stored="true" multiValued="false" docValues="true"/>
@@ -378,6 +383,10 @@
 		<field name="user_rating_link" type="integer" indexed="true" stored="false" multiValued="true"/>
 		<field name="user_not_interested_link" type="integer" indexed="true" stored="false" multiValued="true"/>
 		<field name="user_reading_history_link" type="integer" indexed="true" stored="false" multiValued="true"/>
+
+		<field name="list_link" type="integer" indexed="true" stored="false" multiValued="true"/>
+		<dynamicField name="list_entry_weight_*" type="integer" indexed="true" docValues="true" stored="false" multiValued="true"/>
+		<dynamicField name="list_entry_date_added_*" type="integer" indexed="true" docValues="true" stored="false" multiValued="true"/>
 
 		<!-- Edition -->
 		<field name="edition_info" type="unchanged_string" indexed="true" stored="false" multiValued="true" docValues="false"/>
