@@ -221,7 +221,7 @@
 		<!-- AUTHOR INFORMATION -->
 		<field name="author" type="searchable_text_unstemmed" indexed="true" stored="false" />
 		<field name="author_display" type="unchanged_string" indexed="false" stored="true" multiValued="false"/> <!-- The author to display to the user -->
-		<field name="authorStr" type="unchanged_string" indexed="true" stored="true" termVectors="true"/>
+		<field name="authorStr" type="unchanged_string" indexed="true" stored="true" termVectors="true" docValues="true"/>
 		<field name="author_sort" type="alphaOnlySort" indexed="true" stored="true"/> <!-- author for sorting -->
 		<field name="author_exact" type="text-exact" indexed="true" stored="true" />
 		<field name="author_left" type="text-left" indexed="true" stored="true" />
@@ -257,20 +257,20 @@
 
 		<!-- Format information -->
 		<field name="grouping_category" type="unchanged_string" indexed="true" stored="true" multiValued="false"/>
-		<field name="format" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="format" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 		<field name="format_boost" type="integer" indexed="true" stored="false"/>
-		<field name="format_category" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="format_category" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 
 		<!-- Fields to determine ownership and location based on location codes -->
-		<field name="owning_library" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
-		<field name="owning_location" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
-		<field name="collection" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
-		<field name="detailed_location" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
-		<field name="shelf_location" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="owning_library" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="owning_location" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="collection" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="detailed_location" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="shelf_location" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 
 		<!-- Fields to determine availability -->
-		<field name="available_at" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
-		<field name="availability_toggle" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="available_at" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
+		<field name="availability_toggle" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 		<dynamicField name="available_copies_*" type="integer" indexed="true" docValues="true" stored="false" multiValued="true"/>
 
 		<!-- Language Related Fields -->\
@@ -282,7 +282,7 @@
 
 		<!-- Publication information -->
 		<field name="publisher" type="searchable_text_minimal_stem" indexed="true" stored="true" multiValued="true"/>
-		<field name="publisherStr" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="publisherStr" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 		<field name="publishDate" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 		<field name="publishDateSort" type="unchanged_string" indexed="true" stored="true"/>
 		<field name="placeOfPublication" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
@@ -292,7 +292,7 @@
 		<field name="duration" type="pints" indexed="true" stored="true" multiValued="true" default="0" docValues="true"/>
 		<field name="edition" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
 		<field name="dateSpan" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
-		<field name="econtent_source" type="unchanged_string" indexed="true" stored="true" multiValued="true"/>
+		<field name="econtent_source" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true"/>
 		<field name="subject_facet" type="unchanged_string" indexed="true" stored="true" multiValued="true" docValues="true" termVectors="true"/>
 		<field name="subject" type="searchable_text_minimal_stem" indexed="true" stored="true" multiValued="true"/>
 		<field name="subject_proper" type="textProper" indexed="true" stored="false" multiValued="true"/>
